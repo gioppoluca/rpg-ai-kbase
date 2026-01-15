@@ -1,0 +1,26 @@
+services:
+  rag-gateway:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_CHAT_MODEL=qwen2.5:7b-instruct
+      - MEMVID_PATH=/data/knowledge.mv2
+      - MD_DIR=/kb/md
+      - PDF_DIR=/kb/pdf
+    volumes:
+      - ./data:/kb
+      - ./memvid_store:/data
+    depends_on:
+      - ollama
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  ollama:
