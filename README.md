@@ -21,6 +21,7 @@ openwebui-rag-fastapi/
 ```bash
 
 docker run --rm -it -p 8000:8000 -v ${PWD}:/app -w /app -e MEMVID_DIR=/app/memvid -e MEMVID_INDEX=/app/memvid/kb.mv2 --env-file .env   python:3.12-slim /bin/bash
+docker run --rm -it -p 8000:8000 -v ${PWD}:/app -w /app -e MEMVID_DIR=/app/memvid -e MEMVID_INDEX=/app/memvid/kb.mv2 --env-file .env   python:3.12-slim /bin/bash
 
 python -m venv .venv
 source .venv/bin/activate
