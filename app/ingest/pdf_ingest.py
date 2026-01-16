@@ -1,6 +1,6 @@
 import os
 import re
-from typing import Dict, List
+from typing import Dict, List, Any
 
 from pypdf import PdfReader
 
@@ -20,7 +20,7 @@ def extract_pdf_pages(path: str) -> List[str]:
     return pages
 
 
-def ingest_pdf_file(path: str) -> int:
+def ingest_pdf_file(mv_client: Any,path: str) -> int:
     filename = os.path.basename(path)
     pages = extract_pdf_pages(path)
 
@@ -51,12 +51,12 @@ def ingest_pdf_file(path: str) -> int:
             }
             title = os.path.splitext(filename)[0]
             label = "pdf"
-            put_chunk(title=title, label=label, text=chunk_text, metadata=metadata)
+            put_chunk(mv=mv_client, title=title, label=label, text=chunk_text, metadata=metadata)
             emitted += 1
     return emitted
 
 
-def ingest_pdf_dir(pdf_dir: str | None = None) -> Dict[str, int]:
+def ingest_pdf_dir(mv_client: Any,pdf_dir: str | None = None) -> Dict[str, int]:
     pdf_dir = pdf_dir or settings.pdf_dir
     stats = {"files": 0, "chunks": 0}
     for root, _, files in os.walk(pdf_dir):
@@ -64,5 +64,5 @@ def ingest_pdf_dir(pdf_dir: str | None = None) -> Dict[str, int]:
             if not f.lower().endswith(".pdf"):
                 continue
             stats["files"] += 1
-            stats["chunks"] += ingest_pdf_file(os.path.join(root, f))
+            stats["chunks"] += ingest_pdf_file(mv_client=mv_client, path=os.path.join(root, f))
     return stats

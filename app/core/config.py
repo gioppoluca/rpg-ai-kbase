@@ -16,11 +16,16 @@ class Settings(BaseSettings):
 
     # Memvid
     memvid_kind: str = "basic"
-    memvid_path: str = "./memvid_store/knowledge.mv2"
+    memvid_path: str = "/tmp"
+#    memvid_path: str = os.getenv(
+#        "MEMVID_PATH", os.getenv("MEMVID_INDEX", "/app/memvid/kb.mv2")#
+#    )
 
     # Knowledge-base folders
     md_dir: str = "./data/md"
     pdf_dir: str = "./data/pdf"
+    md_dir: str = os.getenv("MD_DIR", os.getenv("DATA_MD_DIR", "/app/data/md"))
+    pdf_dir: str = os.getenv("PDF_DIR", os.getenv("DATA_PDF_DIR", "/app/data/pdf"))
 
     # Chunking
     md_chunk_target_tokens: int = 900

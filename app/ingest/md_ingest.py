@@ -6,12 +6,13 @@ import logging
 import yaml
 
 from app.core.config import settings
-from app.core.memvid_client import put_chunk
+from app.core.memvid_client import put_chunk, get_memvid
 from app.utils.text import approx_token_count, split_by_token_target
 from pathlib import Path
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 logger = logging.getLogger("app.ingest")
+
 
 @dataclass
 class MdDoc:
@@ -27,7 +28,7 @@ def parse_md(path: str) -> MdDoc:
     m = FRONTMATTER_RE.match(raw)
     if m:
         fm_text = m.group(1)
-        body = raw[m.end():]
+        body = raw[m.end() :]
         try:
             frontmatter = yaml.safe_load(fm_text) or {}
         except Exception:
@@ -75,7 +76,11 @@ def header_chunks(body: str) -> List[Tuple[str, str]]:
 
 
 def build_embed_prefix(frontmatter: Dict[str, Any], filename: str) -> str:
-    title = frontmatter.get("title") or frontmatter.get("name") or os.path.splitext(os.path.basename(filename))[0]
+    title = (
+        frontmatter.get("title")
+        or frontmatter.get("name")
+        or os.path.splitext(os.path.basename(filename))[0]
+    )
     doc_type = frontmatter.get("type") or frontmatter.get("doc_type")
     tags = frontmatter.get("tags")
     aliases = frontmatter.get("aliases")
@@ -96,25 +101,34 @@ def build_embed_prefix(frontmatter: Dict[str, Any], filename: str) -> str:
     return "[" + " | ".join(parts) + "]\n\n"
 
 
-def ingest_md_file(path: str) -> int:
+def ingest_md_file(mv_client: Any,path: str) -> int:
     doc = parse_md(path)
     filename = os.path.basename(path)
     prefix = build_embed_prefix(doc.frontmatter, filename)
-    md_dir = Path(settings.data_md_dir)
-    logger.info("Starting MD ingestion")
-    logger.info("MD dir: %s (exists=%s)", md_dir, md_dir.exists())
-    logger.info("Memvid index path: %s", settings.memvid_index)
+    logger.info("Starting MD file ingestion: %s", path)
+    logger.info(
+        "MD base dir (settings.data_md_dir): %s", str(Path(settings.data_md_dir))
+    )
+    logger.info("Memvid path (writer): %s", getattr(settings, "memvid_path", None))
+    logger.info(
+        "Memvid index (unused by writer): %s", getattr(settings, "memvid_index", None)
+    )
 
     # split by headings, then token-window
     raw_sections = header_chunks(doc.body)
     logger.info("MD file '%s' has %d sections", filename, len(raw_sections))
 
     emitted = 0
+    
     for section_path, section_text in raw_sections:
         if not section_text.strip():
             continue
-        merged_text = prefix + (f"Section: {section_path}\n\n" if section_path else "") + section_text
-        logger.info("Merged Text '%s'", merged_text)
+        merged_text = (
+            prefix
+            + (f"Section: {section_path}\n\n" if section_path else "")
+            + section_text
+        )
+        # logger.info("Merged Text '%s'", merged_text)
         # token split (approx)
         for idx, chunk_text in enumerate(
             split_by_token_target(
@@ -125,8 +139,13 @@ def ingest_md_file(path: str) -> int:
             )
         ):
             if approx_token_count(chunk_text) < settings.md_chunk_min_tokens:
-                logger.info("Skipping small MD chunk: file=%s section='%s' chunk_index=%d tokens=%d",
-                            filename, section_path, idx, approx_token_count(chunk_text))
+                logger.info(
+                    "Skipping small MD chunk: file=%s section='%s' chunk_index=%d tokens=%d",
+                    filename,
+                    section_path,
+                    idx,
+                    approx_token_count(chunk_text),
+                )
                 continue
             metadata = {
                 "source_type": "md",
@@ -143,15 +162,25 @@ def ingest_md_file(path: str) -> int:
                 idx,
                 approx_token_count(chunk_text),
             )
-            title = doc.frontmatter.get("title") or doc.frontmatter.get("name") or filename
+            title = (
+                doc.frontmatter.get("title") or doc.frontmatter.get("name") or filename
+            )
             label = doc.frontmatter.get("type") or "md"
-            logger.info("Putting chunk to Memvid: title='%s' label='%s'", str(title), str(label))
-            put_chunk(title=str(title), label=str(label), text=chunk_text, metadata=metadata)
+            logger.info(
+                "Putting chunk to Memvid: title='%s' label='%s'", str(title), str(label)
+            )
+            put_chunk(
+                mv=mv_client,
+                title=str(title),
+                label=str(label),
+                text=chunk_text,
+                metadata=metadata,
+            )
             emitted += 1
     return emitted
 
 
-def ingest_md_dir(md_dir: str | None = None) -> Dict[str, int]:
+def ingest_md_dir(mv_client: Any, md_dir: str | None = None) -> Dict[str, int]:
     md_dir = md_dir or settings.md_dir
     stats = {"files": 0, "chunks": 0}
     logger.info("Ingesting MD directory: %s", md_dir)
@@ -160,5 +189,5 @@ def ingest_md_dir(md_dir: str | None = None) -> Dict[str, int]:
             if not f.lower().endswith(".md"):
                 continue
             stats["files"] += 1
-            stats["chunks"] += ingest_md_file(os.path.join(root, f))
+            stats["chunks"] += ingest_md_file(mv_client=mv_client, path=os.path.join(root, f))
     return stats
